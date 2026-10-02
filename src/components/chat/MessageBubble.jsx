@@ -1,3 +1,4 @@
+
 import {
   useEffect,
   useLayoutEffect,
@@ -80,6 +81,12 @@ const Icon = ({ type, size = 16 }) => {
       <>
         <rect x="9" y="3" width="6" height="11" rx="3" />
         <path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8" />
+      </>
+    ),
+
+    equalizer: (
+      <>
+        <path d="M7 7v10M12 4v16M17 7v10" />
       </>
     ),
   };
@@ -254,36 +261,52 @@ export default function MessageBubble({
     const rect = bubble.getBoundingClientRect();
     const menuWidth = 208;
     const gap = 8;
-    const menuHeight = menuRef.current?.getBoundingClientRect().height || 250;
+    const menuHeight =
+      menuRef.current?.getBoundingClientRect().height || 250;
     const navbarSafeArea = 72;
     const viewportPadding = 10;
 
-    // Keep the menu with the message: prefer above, otherwise below.
     let top = rect.top - menuHeight - gap;
+
     if (top < navbarSafeArea) {
       top = rect.bottom + gap;
     }
 
-    if (top + menuHeight > window.innerHeight - viewportPadding) {
+    if (
+      top + menuHeight >
+      window.innerHeight - viewportPadding
+    ) {
       top = Math.max(
         navbarSafeArea,
-        Math.min(rect.top, window.innerHeight - menuHeight - viewportPadding)
+        Math.min(
+          rect.top,
+          window.innerHeight -
+            menuHeight -
+            viewportPadding
+        )
       );
     }
 
-    // Align to the same side as the message without crossing the viewport.
-    let left = isOwn ? rect.right - menuWidth : rect.left;
+    let left = isOwn
+      ? rect.right - menuWidth
+      : rect.left;
+
     left = Math.max(
       viewportPadding,
-      Math.min(left, window.innerWidth - menuWidth - viewportPadding)
+      Math.min(
+        left,
+        window.innerWidth -
+          menuWidth -
+          viewportPadding
+      )
     );
 
     setMenuPosition({ top, left });
   };
 
-  /*
-    Menu render hone ke baad actual height calculate karo.
-  */
+  /* =========================================================
+     MENU POSITION AFTER RENDER
+     ========================================================= */
 
   useLayoutEffect(() => {
     if (!selected || selectionMode) return;
@@ -297,9 +320,9 @@ export default function MessageBubble({
     return () => cancelAnimationFrame(frame);
   }, [selected, selectionMode, darkMode]);
 
-  /*
-    Scroll + resize par menu ki position update.
-  */
+  /* =========================================================
+     SCROLL + RESIZE MENU POSITION
+     ========================================================= */
 
   useEffect(() => {
     if (!selected || selectionMode) return;
@@ -364,7 +387,11 @@ export default function MessageBubble({
 
   const changeSpeed = () =>
     setSpeed((s) =>
-      s === 1 ? 1.5 : s === 1.5 ? 2 : 1
+      s === 1
+        ? 1.5
+        : s === 1.5
+          ? 2
+          : 1
     );
 
   /* =========================================================
@@ -400,7 +427,9 @@ export default function MessageBubble({
               left: `${menuPosition.left}px`,
               width: "208px",
             }}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) =>
+              e.stopPropagation()
+            }
           >
             <div
               className={`w-full rounded-2xl border p-1.5 shadow-[0_16px_45px_rgba(0,0,0,0.38)] backdrop-blur-xl ${
@@ -477,14 +506,22 @@ export default function MessageBubble({
       <div
         data-message-root
         ref={bubbleRef}
-        style={{ "--accent": darkMode ? "#3B82F6" : "#978B21" }}
+        style={{
+          "--accent": darkMode
+            ? "#3B82F6"
+            : "#978B21",
+        }}
         className={`group relative flex w-full ${
-          isOwn ? "justify-end" : "justify-start"
+          isOwn
+            ? "justify-end"
+            : "justify-start"
         }`}
       >
         <div
           className={`relative flex max-w-[92%] items-end sm:max-w-[78%] ${
-            isOwn ? "flex-row-reverse" : "flex-row"
+            isOwn
+              ? "flex-row-reverse"
+              : "flex-row"
           }`}
         >
           {/* =====================================================
@@ -496,7 +533,9 @@ export default function MessageBubble({
               type="button"
               onClick={onToggleSelect}
               className={`absolute ${
-                isOwn ? "-left-7" : "-right-7"
+                isOwn
+                  ? "-left-7"
+                  : "-right-7"
               } top-1/2 z-[300] flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-md border ${
                 checked
                   ? "border-[var(--accent)] bg-[var(--accent)] text-white"
@@ -591,7 +630,9 @@ export default function MessageBubble({
                 </p>
               )}
 
-              {/* IMAGE */}
+              {/* =================================================
+                  IMAGE
+              ================================================= */}
 
               {isImage && (
                 <div className="mt-1 overflow-hidden rounded-xl">
@@ -606,7 +647,8 @@ export default function MessageBubble({
                       <img
                         src={message.fileData}
                         alt={
-                          message.fileName || "Image"
+                          message.fileName ||
+                          "Image"
                         }
                         className="max-h-[330px] w-full min-w-[160px] rounded-xl object-cover"
                       />
@@ -650,7 +692,9 @@ export default function MessageBubble({
                 </div>
               )}
 
-              {/* VIDEO */}
+              {/* =================================================
+                  VIDEO
+              ================================================= */}
 
               {isVideo && (
                 <div className="mt-1 overflow-hidden rounded-xl">
@@ -690,7 +734,9 @@ export default function MessageBubble({
                 </div>
               )}
 
-              {/* DOCUMENT */}
+              {/* =================================================
+                  DOCUMENT
+              ================================================= */}
 
               {!isImage &&
                 !isVideo &&
@@ -756,25 +802,52 @@ export default function MessageBubble({
                   </div>
                 )}
 
-              {/* AUDIO / VOICE */}
+              {/* =================================================
+                  AUDIO / VOICE
+              ================================================= */}
 
               {isAudio && (
                 <div className="mt-1 flex min-w-[270px] items-center gap-2">
+                  {/* MIC ICON */}
+
+                  <span
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--accent)]/45 bg-white/25 text-[var(--accent)] shadow-sm"
+                    aria-hidden="true"
+                  >
+                    <Icon type="mic" size={17} />
+                  </span>
+
+                  {/* PLAY BUTTON */}
+
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleAudio();
                     }}
-                    className="flex h-9 w-9 shrink-0 items-center justify-center bg-transparent text-[var(--accent)]"
-                    aria-label={playing ? "Pause voice message" : "Play voice message"}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-transparent text-[var(--accent)] transition-transform duration-200 hover:scale-105"
+                    aria-label={
+                      playing
+                        ? "Pause voice message"
+                        : "Play voice message"
+                    }
                   >
                     {playing ? (
-                      <Icon type="pause" />
+                      <Icon
+                        type="equalizer"
+                        size={19}
+                      />
                     ) : (
-                      <span className="text-lg leading-none">▶</span>
+                      /* SOLID FILLED TRIANGLE */
+
+                      <span
+                        className="ml-[2px] h-0 w-0 border-y-[7px] border-l-[11px] border-y-transparent border-l-[var(--accent)]"
+                        aria-hidden="true"
+                      />
                     )}
                   </button>
+
+                  {/* WAVEFORM */}
 
                   <div className="min-w-0 flex-1">
                     <div className="flex h-7 items-center gap-[2px]">
@@ -786,7 +859,9 @@ export default function MessageBubble({
                           className="w-[3px] rounded-full bg-[var(--accent)]/45"
                           style={{
                             height: `${
-                              7 + ((i * 13) % 18)
+                              7 +
+                              ((i * 13) %
+                                18)
                             }px`,
                           }}
                         />
@@ -803,6 +878,8 @@ export default function MessageBubble({
                     </div>
                   </div>
 
+                  {/* SPEED */}
+
                   <button
                     type="button"
                     onClick={(e) => {
@@ -814,11 +891,15 @@ export default function MessageBubble({
                     {speed}x
                   </button>
 
+                  {/* DURATION */}
+
                   <span className="text-[9px] text-[var(--accent)]/60">
                     {formatDuration(
                       message.voiceDuration
                     )}
                   </span>
+
+                  {/* AUDIO */}
 
                   <audio
                     ref={audioRef}
@@ -831,7 +912,9 @@ export default function MessageBubble({
                 </div>
               )}
 
-              {/* MESSAGE TIME */}
+              {/* =================================================
+                  MESSAGE TIME
+              ================================================= */}
 
               <div
                 className={`mt-1 flex items-center justify-end gap-1 text-[9px] ${
@@ -865,11 +948,10 @@ export default function MessageBubble({
 
       {/* =======================================================
           PORTAL ACTION MENU
-          THIS IS OUTSIDE THE CHAT CONTAINER
-          SO NAVBAR / OVERFLOW CANNOT HIDE IT
       ======================================================= */}
 
       {actionMenu}
     </>
   );
 }
+

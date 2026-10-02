@@ -165,18 +165,6 @@ export default function ChatRoom({
   const [selectedFile, setSelectedFile] =
     useState(null);
 
-  const [cameraOpen, setCameraOpen] =
-    useState(false);
-
-  const [cameraRecording, setCameraRecording] =
-    useState(false);
-
-  const [cameraRecordingTime, setCameraRecordingTime] =
-    useState(0);
-
-  const [cameraEmojiPicker, setCameraEmojiPicker] =
-    useState(false);
-
   const [selectedVoice, setSelectedVoice] =
     useState(null);
 
@@ -300,24 +288,6 @@ export default function ChatRoom({
 
   const mediaStreamRef =
     useRef(null);
-
-  const cameraStreamRef =
-    useRef(null);
-
-  const cameraPreviewRef =
-    useRef(null);
-
-  const cameraRecorderRef =
-    useRef(null);
-
-  const cameraChunksRef =
-    useRef([]);
-
-  const cameraRecordingTimerRef =
-    useRef(null);
-
-  const cameraRecordingTimeRef =
-    useRef(0);
 
   const audioChunksRef =
     useRef([]);
@@ -968,10 +938,7 @@ export default function ChatRoom({
 
   const openMediaEditor =
     () => {
-      if (
-        !selectedFile?.type?.startsWith("image/") &&
-        !selectedFile?.type?.startsWith("video/")
-      ) {
+      if (!selectedFile?.type?.startsWith("image/")) {
         return;
       }
 
@@ -1199,7 +1166,6 @@ export default function ChatRoom({
         data:
           reader.result,
         size: file.size,
-        cameraCapture: false,
       });
 
       setSelectedVoice(
@@ -1257,217 +1223,6 @@ export default function ChatRoom({
 
     reader.readAsDataURL(file);
   };
-
-  /* =====================================================
-     CAMERA
-  ===================================================== */
-
-  const stopCamera = () => {
-    cameraRecorderRef.current = null;
-
-    cameraStreamRef.current
-      ?.getTracks()
-      .forEach((track) => track.stop());
-
-    cameraStreamRef.current = null;
-
-    if (cameraRecordingTimerRef.current) {
-      window.clearInterval(cameraRecordingTimerRef.current);
-      cameraRecordingTimerRef.current = null;
-    }
-    cameraRecordingTimeRef.current = 0;
-    setCameraRecordingTime(0);
-
-    if (cameraPreviewRef.current) {
-      cameraPreviewRef.current.srcObject = null;
-    }
-
-    setCameraRecording(false);
-    setCameraOpen(false);
-    setCameraEmojiPicker(false);
-  };
-
-  const prepareCameraFile = (file) => {
-    setSelectedFile(file);
-    setSelectedVoice(null);
-    setMediaCaption("");
-    setImageText("");
-    setTextPosition({ x: 50, y: 50 });
-    setTextScale(1);
-    setDrawStrokes([]);
-    setCurrentStroke([]);
-    setDrawWidth(3);
-    setImageEmoji("");
-    setEmojiPosition({ x: 50, y: 50 });
-    setEmojiScale(1);
-    setShowImageEmojiPicker(false);
-    setCropRect({
-      x: 0,
-      y: 0,
-      width: 100,
-      height: 100,
-    });
-    setEditorMode("preview");
-    setEditorBackup(null);
-    setCameraEmojiPicker(false);
-    setCameraOpen(false);
-  };
-
-  const handleCamera = async () => {
-    try {
-      if (
-        !navigator.mediaDevices ||
-        !navigator.mediaDevices.getUserMedia
-      ) {
-        alert("Camera is not available in this browser.");
-        return;
-      }
-
-      const stream =
-        await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "user",
-          },
-          audio: true,
-        });
-
-      cameraStreamRef.current = stream;
-      setCameraOpen(true);
-    } catch (error) {
-      console.error(error);
-      alert(
-        "Camera could not be opened. Please allow camera and microphone permission."
-      );
-    }
-  };
-
-  const captureCameraPhoto = () => {
-    const video = cameraPreviewRef.current;
-    const stream = cameraStreamRef.current;
-
-    if (!video || !stream) return;
-
-    const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth || 1280;
-    canvas.height = video.videoHeight || 720;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.drawImage(
-      video,
-      0,
-      0,
-      canvas.width,
-      canvas.height
-    );
-
-    const data = canvas.toDataURL("image/jpeg", 0.88);
-
-    stream.getTracks().forEach((track) => track.stop());
-    cameraStreamRef.current = null;
-
-    prepareCameraFile({
-      name: `camera-${Date.now()}.jpg`,
-      type: "image/jpeg",
-      data,
-      size: Math.round(data.length * 0.75),
-      cameraCapture: true,
-    });
-  };
-
-  const toggleCameraVideo = () => {
-    const stream = cameraStreamRef.current;
-    if (!stream) return;
-
-    if (cameraRecording) {
-      cameraRecorderRef.current?.stop();
-      if (cameraRecordingTimerRef.current) {
-        window.clearInterval(cameraRecordingTimerRef.current);
-        cameraRecordingTimerRef.current = null;
-      }
-      setCameraRecording(false);
-      return;
-    }
-
-    try {
-      const recorder = new MediaRecorder(stream);
-      cameraRecorderRef.current = recorder;
-      cameraChunksRef.current = [];
-
-      recorder.ondataavailable = (event) => {
-        if (event.data?.size) {
-          cameraChunksRef.current.push(event.data);
-        }
-      };
-
-      recorder.onstop = () => {
-        if (cameraRecordingTimerRef.current) {
-          window.clearInterval(cameraRecordingTimerRef.current);
-          cameraRecordingTimerRef.current = null;
-        }
-        setCameraRecordingTime(cameraRecordingTimeRef.current);
-
-        const blob = new Blob(cameraChunksRef.current, {
-          type: recorder.mimeType || "video/webm",
-        });
-
-        stream.getTracks().forEach((track) => track.stop());
-        cameraStreamRef.current = null;
-
-        const reader = new FileReader();
-
-        reader.onloadend = () => {
-          if (typeof reader.result !== "string") return;
-
-          prepareCameraFile({
-            name: `camera-${Date.now()}.webm`,
-            type: recorder.mimeType || "video/webm",
-            data: reader.result,
-            size: blob.size,
-            cameraCapture: true,
-          });
-        };
-
-        reader.readAsDataURL(blob);
-      };
-
-      recorder.start();
-      cameraRecordingTimeRef.current = 0;
-      setCameraRecordingTime(0);
-      setCameraRecording(true);
-      cameraRecordingTimerRef.current = window.setInterval(() => {
-        cameraRecordingTimeRef.current += 1;
-        setCameraRecordingTime(cameraRecordingTimeRef.current);
-      }, 1000);
-    } catch (error) {
-      console.error(error);
-      alert("Video recording is not available in this browser.");
-    }
-  };
-
-  useEffect(() => {
-    if (!cameraOpen) return;
-
-    const video = cameraPreviewRef.current;
-    const stream = cameraStreamRef.current;
-
-    if (!video || !stream) return;
-
-    video.srcObject = stream;
-    video.play().catch(() => {});
-  }, [cameraOpen]);
-
-  useEffect(() => {
-    return () => {
-      cameraStreamRef.current
-        ?.getTracks()
-        .forEach((track) => track.stop());
-      if (cameraRecordingTimerRef.current) {
-        window.clearInterval(cameraRecordingTimerRef.current);
-      }
-    };
-  }, []);
 
   /* =====================================================
      VOICE
@@ -2357,7 +2112,9 @@ export default function ChatRoom({
                 }
 
                 ctx.strokeStyle =
-                  stroke.color;
+                  stroke.color === "var(--accent)"
+                    ? ORANGE
+                    : stroke.color || ORANGE;
 
                 ctx.lineWidth =
                   Math.max(
@@ -2383,26 +2140,17 @@ export default function ChatRoom({
                     index
                   ) => {
                     const normalizedX =
-                      (point.x -
-                        cropRect.x /
-                          100) /
-                      (cropRect.width /
-                        100);
+                      (Number(point.x) / 100 -
+                        Number(cropRect.x) / 100) /
+                      (Number(cropRect.width) / 100);
 
                     const normalizedY =
-                      (point.y -
-                        cropRect.y /
-                          100) /
-                      (cropRect.height /
-                        100);
+                      (Number(point.y) / 100 -
+                        Number(cropRect.y) / 100) /
+                      (Number(cropRect.height) / 100);
 
-                    const x =
-                      normalizedX *
-                      canvas.width;
-
-                    const y =
-                      normalizedY *
-                      canvas.height;
+                    const x = normalizedX * canvas.width;
+                    const y = normalizedY * canvas.height;
 
                     if (
                       index ===
@@ -2858,9 +2606,7 @@ export default function ChatRoom({
         return;
       }
 
-      const composed = selectedFile.type.startsWith("video/")
-        ? await composeEditedVideo()
-        : await composeEditedImage();
+      const composed = await composeEditedImage();
 
       /*
         Image with crop + pencil +
@@ -3796,24 +3542,18 @@ export default function ChatRoom({
           {messages.length ===
           0 ? (
             <div className="flex h-full flex-col items-center justify-center text-center">
-              <div
-                className={`mb-4 flex h-16 w-16 items-center justify-center rounded-full ${
-                  darkMode
-                    ? "bg-[#20304a]"
-                    : "bg-white"
-                } text-2xl text-[var(--accent)]`}
-              >
-                G
-              </div>
+              <Avatar name={username || "You"} large />
 
-              <h2 className="text-lg font-bold">
-                No messages yet
+              <h2 className="mt-4 text-lg font-bold">
+                {username?.trim() || "You"}
               </h2>
 
               <p className="mt-1 text-xs opacity-55">
-                Send a message
-                to start the
-                conversation.
+                No messages yet
+              </p>
+
+              <p className="text-xs opacity-45">
+                Send a message to start the conversation.
               </p>
             </div>
           ) : (
@@ -4022,7 +3762,6 @@ export default function ChatRoom({
             }
             onPhoto={() => selectAttachment("image")}
             onVideo={() => selectAttachment("video")}
-            onCamera={handleCamera}
           />
         )}
 
@@ -4072,74 +3811,6 @@ export default function ChatRoom({
               "";
           }}
         />
-
-        {/* =================================================
-            CAMERA
-        ================================================= */}
-
-        {cameraOpen && (
-          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 p-3">
-            <div
-              className={`w-full max-w-[620px] overflow-hidden rounded-3xl border shadow-2xl ${
-                darkMode
-                  ? "border-white/10 bg-[#0b1629] text-white"
-                  : "border-[var(--accent)]/25 bg-white text-[#071F49]"
-              }`}
-            >
-              <div className="flex items-center justify-between bg-[var(--accent)] px-5 py-3 text-white">
-                <strong>Camera</strong>
-                <button
-                  type="button"
-                  onClick={stopCamera}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-2xl"
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className="relative flex h-[min(62vh,520px)] items-center justify-center bg-black p-3">
-                <video
-                  ref={cameraPreviewRef}
-                  autoPlay
-                  muted
-                  playsInline
-                  className="max-h-full max-w-full rounded-2xl object-contain"
-                />
-
-                <div className="absolute bottom-5 left-1/2 flex -translate-x-1/2 items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={captureCameraPhoto}
-                    disabled={cameraRecording}
-                    className="flex h-14 w-14 items-center justify-center rounded-full border-4 border-white bg-white/20 text-xl text-white disabled:opacity-40"
-                    title="Take photo"
-                  >
-                    ●
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={toggleCameraVideo}
-                    className={`flex h-14 w-14 items-center justify-center rounded-full border-4 border-white text-xs font-bold text-white ${
-                      cameraRecording
-                        ? "bg-red-500"
-                        : "bg-white/20"
-                    }`}
-                    title={cameraRecording ? "Stop video" : "Record video"}
-                  >
-                    {cameraRecording ? formatDuration(cameraRecordingTime) : "REC"}
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-center gap-2 border-t border-black/10 p-3">
-                <span className="text-[10px] opacity-55">
-                  Photo ya video capture karein, phir caption aur send.
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* =================================================
             MEDIA EDITOR
@@ -4214,16 +3885,6 @@ export default function ChatRoom({
                   onPointerCancel={
                     stopDrawing
                   }
-                  onClick={(event) => {
-                    if (
-                      selectedFile.cameraCapture &&
-                      imageEmoji &&
-                      !cameraEmojiPicker
-                    ) {
-                      const point = getEditorPoint(event);
-                      if (point) setEmojiPosition(point);
-                    }
-                  }}
                 >
                   <div
                     ref={
@@ -4546,26 +4207,6 @@ export default function ChatRoom({
                       EMOJI PICKER INSIDE IMAGE
                   ================================================= */}
 
-                  {selectedFile.cameraCapture &&
-                    cameraEmojiPicker && (
-                      <div
-                        className="absolute bottom-3 left-1/2 z-[80] -translate-x-1/2 overflow-hidden rounded-2xl shadow-2xl"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <EmojiPicker
-                          onEmojiClick={(data) => {
-                            setImageEmoji(data.emoji);
-                            setEmojiPosition({ x: 50, y: 50 });
-                            setEmojiScale(1);
-                            setCameraEmojiPicker(false);
-                          }}
-                          width={300}
-                          height={260}
-                          previewConfig={{ showPreview: false }}
-                        />
-                      </div>
-                    )}
-
                   {editorMode ===
                     "emoji" &&
                     showImageEmojiPicker && (
@@ -4878,20 +4519,7 @@ export default function ChatRoom({
                 <div className="border-t border-[var(--accent)]/15 p-3">
                   {editorMode === "preview" ? (
                     <div className="flex items-center gap-2">
-                      {selectedFile.cameraCapture && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCameraEmojiPicker((value) => !value)
-                          }
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--accent)] text-white"
-                          title="Add emoji"
-                        >
-                          😊
-                        </button>
-                      )}
-
-                      {!selectedFile.cameraCapture && (
+                      {selectedFile.type.startsWith("image/") && (
                         <button
                           type="button"
                           onClick={
@@ -4991,7 +4619,7 @@ export default function ChatRoom({
                 </div>
               ) : (
                 <div className="flex items-center gap-2 border-t border-[var(--accent)]/15 p-3">
-                  {!selectedFile.cameraCapture && (
+                  {selectedFile.type.startsWith("image/") && (
                     <button
                       type="button"
                       onClick={openMediaEditor}
@@ -5043,8 +4671,11 @@ export default function ChatRoom({
                   : "border-[var(--accent)]/20 bg-white"
               }`}
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-transparent text-[var(--accent)]">
-                ▶
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-white" aria-label="Voice message">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="3" width="6" height="11" rx="3"/>
+                  <path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/>
+                </svg>
               </div>
 
               <div className="min-w-0">
@@ -5200,7 +4831,10 @@ export default function ChatRoom({
                   className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-transparent text-[var(--accent)] text-lg"
                 aria-label="Record voice"
                 >
-                  ▶
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="3" width="6" height="11" rx="3"/>
+                    <path d="M5 11a7 7 0 0 0 14 0M12 18v3M8 21h8"/>
+                  </svg>
                 </button>
               </div>
 
