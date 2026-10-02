@@ -40,6 +40,14 @@ const formatFileSize = (size = 0) =>
     ? `${(size / 1024).toFixed(1)} KB`
     : `${(size / (1024 * 1024)).toFixed(1)} MB`;
 
+/*
+  Large media (videos) is split into several socket messages so it never
+  exceeds the server's per-message size limit. Small messages are sent
+  exactly as before.
+*/
+const CHUNK_THRESHOLD = 600000;
+const CHUNK_SIZE = 300000;
+
 function Avatar({ name, large = false }) {
   const colors = [
     "var(--accent)",
@@ -166,6 +174,14 @@ export default function ChatRoom({
     useState(null);
 
   const [selectedVoice, setSelectedVoice] =
+    useState(null);
+
+  // View Once: ids this receiver already opened + the open viewer.
+  // Kept only in this browser, so every receiver has their own single view.
+  const viewedOnceRef =
+    useRef(new Set());
+
+  const [viewOnceViewer, setViewOnceViewer] =
     useState(null);
 
   const [viewOnce, setViewOnce] =
@@ -425,6 +441,8 @@ export default function ChatRoom({
         Date.now(),
     });
 
+    const chunkStore = {};
+
     const handleMessage = (raw) => {
       if (!raw) return;
 
@@ -445,6 +463,40 @@ export default function ChatRoom({
           incomingUsername,
           msg.time
         );
+        return;
+      }
+
+      if (msg.type === "msg-chunk") {
+        if (
+          !msg.messageId ||
+          incomingUsername?.toLowerCase() === cleanUsername.toLowerCase()
+        ) {
+          return;
+        }
+
+        const entry =
+          chunkStore[msg.messageId] ||
+          (chunkStore[msg.messageId] = {
+            parts: [],
+            received: 0,
+            total: msg.total,
+          });
+
+        if (entry.parts[msg.index] === undefined) {
+          entry.parts[msg.index] = msg.part;
+          entry.received += 1;
+        }
+
+        if (entry.received >= entry.total) {
+          delete chunkStore[msg.messageId];
+
+          try {
+            handleMessage(JSON.parse(entry.parts.join("")));
+          } catch (error) {
+            console.error("Could not rebuild media message", error);
+          }
+        }
+
         return;
       }
 
@@ -2780,10 +2832,28 @@ export default function ChatRoom({
       // Save message/media/reactions/
       // replies/favorites/pins in backend/database.
 
-      socket.emit(
-        "send",
-        newMessage
-      );
+      const json = JSON.stringify(newMessage);
+
+      if (json.length <= CHUNK_THRESHOLD) {
+        socket.emit(
+          "send",
+          newMessage
+        );
+      } else {
+        const total = Math.ceil(json.length / CHUNK_SIZE);
+
+        for (let i = 0; i < total; i += 1) {
+          socket.emit("send", {
+            type: "msg-chunk",
+            messageId: newMessage.id,
+            index: i,
+            total,
+            part: json.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE),
+            username: newMessage.username,
+            room: newMessage.room,
+          });
+        }
+      }
 
       setMessages(
         (prev) => [
@@ -3138,10 +3208,96 @@ export default function ChatRoom({
      FILE
   ===================================================== */
 
+  const openViewOnce =
+    (event, msg, isOwn) => {
+      if (
+        !msg?.viewOnce ||
+        isOwn ||
+        !msg.fileData ||
+        !(
+          msg.fileType?.startsWith("image/") ||
+          msg.fileType?.startsWith("video/")
+        )
+      ) {
+        return;
+      }
+
+      const button =
+        event.target?.closest?.(
+          "button"
+        );
+
+      // Only the "1 Photo / 1 Video" button opens the media.
+      if (
+        !button ||
+        !button.className.includes(
+          "text-left"
+        ) ||
+        !button.innerText
+          .trim()
+          .startsWith("1")
+      ) {
+        return;
+      }
+
+      if (
+        viewedOnceRef.current.has(
+          msg.id
+        ) ||
+        viewOnceViewer
+      ) {
+        event.stopPropagation();
+        event.preventDefault();
+        return;
+      }
+
+      viewedOnceRef.current.add(
+        msg.id
+      );
+
+      setViewOnceViewer({
+        id: msg.id,
+        type: msg.fileType,
+        data: msg.fileData,
+        name: msg.fileName,
+      });
+    };
+
+  const closeViewOnce =
+    () => {
+      const id =
+        viewOnceViewer?.id;
+
+      setViewOnceViewer(null);
+
+      // Drop the media from this receiver's copy so it cannot be reopened.
+      if (id) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m?.id === id
+              ? {
+                  ...m,
+                  fileData: undefined,
+                }
+              : m
+          )
+        );
+      }
+    };
+
   const openFile =
     (msg) => {
       if (!msg?.fileData)
         return;
+
+      // View Once media cannot be opened outside the one-time viewer.
+      if (
+        msg.viewOnce &&
+        msg.username?.trim().toLowerCase() !==
+          username?.trim().toLowerCase()
+      ) {
+        return;
+      }
 
       const win =
         window.open();
@@ -3164,6 +3320,15 @@ export default function ChatRoom({
     (msg) => {
       if (!msg?.fileData)
         return;
+
+      // View Once media cannot be saved by the receiver.
+      if (
+        msg.viewOnce &&
+        msg.username?.trim().toLowerCase() !==
+          username?.trim().toLowerCase()
+      ) {
+        return;
+      }
 
       const a =
         document.createElement(
@@ -3607,6 +3772,13 @@ export default function ChatRoom({
                           index
                         ] = el;
                       }}
+                      onClickCapture={(e) =>
+                        openViewOnce(
+                          e,
+                          msg,
+                          isOwn
+                        )
+                      }
                     >
                       <MessageBubble
                         message={
@@ -3722,6 +3894,60 @@ export default function ChatRoom({
             </div>
           )}
         </main>
+
+        {/* VIEW ONCE VIEWER */}
+
+        {viewOnceViewer && (
+          <div
+            className="fixed inset-0 z-[1000000] flex flex-col items-center justify-center bg-black/90 p-4"
+            onContextMenu={(e) =>
+              e.preventDefault()
+            }
+          >
+            <button
+              type="button"
+              onClick={
+                closeViewOnce
+              }
+              className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-xl text-white"
+              aria-label="Close"
+            >
+              ×
+            </button>
+
+            {viewOnceViewer.type?.startsWith(
+              "video/"
+            ) ? (
+              <video
+                src={
+                  viewOnceViewer.data
+                }
+                controls
+                autoPlay
+                playsInline
+                controlsList="nodownload noplaybackrate"
+                disablePictureInPicture
+                className="max-h-[85vh] max-w-full rounded-xl"
+              />
+            ) : (
+              <img
+                src={
+                  viewOnceViewer.data
+                }
+                alt={
+                  viewOnceViewer.name ||
+                  "Image"
+                }
+                draggable={false}
+                className="max-h-[85vh] max-w-full rounded-xl object-contain"
+              />
+            )}
+
+            <p className="mt-3 text-xs text-white/70">
+              View once — closing this will remove it
+            </p>
+          </div>
+        )}
 
         {/* MESSAGE EMOJI PICKER */}
 
